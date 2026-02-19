@@ -32,3 +32,8 @@ Already-tracked files matching a newly added pattern are untracked via `git rm -
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hyrfilm/gitignore/master/gitignore -o ~/.config/gitignore/gitignore
 ```
+
+## Uninstall
+```bash
+rm ~/.config/gitignore ~/.local/bin/gitignore
+```
