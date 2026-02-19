@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+"""
+gitignore - A helper script to manage .gitignore files.
+
+Usage:
+  gitignore <pattern> [<pattern> ...]   Add pattern(s) to .gitignore
+  gitignore --undo <pattern>            Remove pattern and untrack files matching it
+  gitignore --list                      Show current .gitignore contents
+  gitignore --defaults                  Add common patterns everyone wants
+  gitignore --python                    Add Python-specific patterns
+  gitignore --js                        Add JavaScript/Node-specific patterns
+
+Install: put this file somewhere on your PATH and chmod +x it.
+"""
+
+import sys
+import os
+import subprocess
+import argparse
+
+DEFAULTS = [
+    ".DS_Store",
+    "Thumbs.db",
+    ".env",
+    ".env.local",
+    "*.log",
+    "*.swp",
+    "*.swo",
+    ".idea/",
+    ".vscode/",
+]
+
+PYTHON_PATTERNS = [
+    "__pycache__/",
+    "*.py[cod]",
+    "*.pyo",
+    ".venv/",
+    "venv/",
+    ".mypy_cache/",
+    ".ruff_cache/",
+    ".pytest_cache/",
+    "*.egg-info/",
+    "dist/",
+    "build/",
+    ".coverage",
+    "htmlcov/",
+    ".tox/",
+]
+
+JS_PATTERNS = [
+    "node_modules/",
+    "dist/",
+    "build/",
+    ".next/",
+    ".nuxt/",
+    "*.min.js",
+    "*.min.css",
+    ".parcel-cache/",
+    "coverage/",
+    ".turbo/",
+    "*.tsbuildinfo",
+]
+
+
+def find_gitignore():
+    """Walk up from cwd to find the repo root and its .gitignore."""
+    cwd = os.path.abspath(os.getcwd())
+    path = cwd
+    while True:
+        if os.path.isdir(os.path.join(path, ".git")):
+            return os.path.join(path, ".gitignore")
+        parent = os.path.dirname(path)
+        if parent == path:
+            # No .git found; fall back to cwd
+            return os.path.join(cwd, ".gitignore")
+        path = parent
+
+
+def read_patterns(gitignore_path):
+    """Return a set of non-comment, non-empty lines from .gitignore."""
+    if not os.path.exists(gitignore_path):
+        return set()
+    with open(gitignore_path) as f:
+        lines = f.readlines()
+    return {l.strip() for l in lines if l.strip() and not l.strip().startswith("#")}
+
+
+def append_patterns(gitignore_path, patterns, label=None):
+    """Append patterns that aren't already present. Returns (added, skipped) lists."""
+    existing = read_patterns(gitignore_path)
+    to_add = []
+    skipped = []
+    for p in patterns:
+        if p in existing:
+            skipped.append(p)
+        else:
+            to_add.append(p)
+
+    if to_add:
+        with open(gitignore_path, "a") as f:
+            # Ensure file ends with newline before appending
+            if os.path.getsize(gitignore_path) > 0:
+                with open(gitignore_path, "rb") as rf:
+                    rf.seek(-1, 2)
+                    last = rf.read(1)
+                if last != b"\n":
+                    f.write("\n")
+            if label:
+                f.write(f"\n# {label}\n")
+            for p in to_add:
+                f.write(p + "\n")
+
+    return to_add, skipped
+
+
+def git_untrack(pattern):
+    """Run git rm --cached for files matching the pattern."""
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--ignored", "--exclude-standard", "-z"],
+            capture_output=True, text=True
+        )
+        files = [f for f in result.stdout.split("\0") if f]
+        if not files:
+            # Fallback: try matching by pattern directly
+            result2 = subprocess.run(
+                ["git", "ls-files", pattern],
+                capture_output=True, text=True
+            )
+            files = [f for f in result2.stdout.splitlines() if f]
+        if files:
+            subprocess.run(["git", "rm", "--cached", "--quiet", "-r"] + files)
+            print(f"  Untracked {len(files)} file(s) from git index.")
+        else:
+            print("  No tracked files matched (nothing to untrack).")
+    except FileNotFoundError:
+        print("  Warning: git not found, skipping untrack step.")
+
+
+def remove_pattern(gitignore_path, pattern):
+    """Remove a pattern line from .gitignore."""
+    if not os.path.exists(gitignore_path):
+        print(f"No .gitignore found at {gitignore_path}")
+        return False
+    with open(gitignore_path) as f:
+        lines = f.readlines()
+    new_lines = [l for l in lines if l.strip() != pattern]
+    if len(new_lines) == len(lines):
+        print(f"Pattern '{pattern}' not found in {gitignore_path}")
+        return False
+    with open(gitignore_path, "w") as f:
+        f.writelines(new_lines)
+    print(f"Removed '{pattern}' from {gitignore_path}")
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Manage .gitignore from anywhere in your repo.",
+        add_help=True,
+    )
+    parser.add_argument("patterns", nargs="*", help="Pattern(s) to add to .gitignore")
+    parser.add_argument("--undo", metavar="PATTERN", help="Remove a pattern and untrack matching files")
+    parser.add_argument("--list", action="store_true", help="Show .gitignore contents")
+    parser.add_argument("--defaults", action="store_true", help="Add common default ignores")
+    parser.add_argument("--python", action="store_true", help="Add Python ignores")
+    parser.add_argument("--js", action="store_true", help="Add JavaScript/Node ignores")
+
+    args = parser.parse_args()
+
+    gitignore_path = find_gitignore()
+
+    # --list
+    if args.list:
+        if not os.path.exists(gitignore_path):
+            print(f"No .gitignore at {gitignore_path}")
+        else:
+            print(f"# {gitignore_path}")
+            with open(gitignore_path) as f:
+                print(f.read(), end="")
+        return
+
+    # --undo
+    if args.undo:
+        pattern = args.undo
+        removed = remove_pattern(gitignore_path, pattern)
+        if removed:
+            git_untrack(pattern)
+        return
+
+    any_action = False
+
+    # --defaults / --python / --js
+    for flag, label, patterns in [
+        (args.defaults, "Defaults", DEFAULTS),
+        (args.python, "Python", PYTHON_PATTERNS),
+        (args.js, "JavaScript", JS_PATTERNS),
+    ]:
+        if flag:
+            any_action = True
+            added, skipped = append_patterns(gitignore_path, patterns, label=label)
+            if added:
+                print(f"Added ({label}): {', '.join(added)}")
+            if skipped:
+                print(f"Already ignored ({label}): {', '.join(skipped)}")
+            # Untrack any newly ignored files
+            for p in added:
+                git_untrack(p)
+
+    # Positional patterns
+    if args.patterns:
+        any_action = True
+        added, skipped = append_patterns(gitignore_path, args.patterns)
+        for p in skipped:
+            print(f"Already in .gitignore: '{p}'")
+            print(f"  If you meant to change it, run: gitignore --undo {p} && gitignore <new-pattern>")
+        if added:
+            print(f"Added to {gitignore_path}: {', '.join(added)}")
+            for p in added:
+                git_untrack(p)
+
+    if not any_action:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()
