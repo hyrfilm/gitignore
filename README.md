@@ -5,7 +5,7 @@ A simple command-line tool to manage `.gitignore` files from anywhere in your re
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hyrfilm/gitignore/master/gitignore -o ~/.config/gitignore/gitignore && chmod +x ~/.config/gitignore/gitignore && ln -sf ~/.config/gitignore/gitignore ~/.local/bin/gitignore
+curl -fsSL https://raw.githubusercontent.com/hyrfilm/gitignore/master/gitignore -o ~/.config/gitignore
 ```
 
 > `~/.local/bin` should already be on your PATH. If not, add this to your `~/.zshrc` or `~/.bashrc`:
