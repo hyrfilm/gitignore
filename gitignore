@@ -129,7 +129,7 @@ def git_untrack(pattern):
             )
             files = [f for f in result2.stdout.splitlines() if f]
         if files:
-            subprocess.run(["git", "rm", "--cached", "--quiet", "-r"] + files)
+            subprocess.run(["git", "rm", "--cached", "--quiet", "-r", "--ignore-unmatch"] + files)
             print(f"  Untracked {len(files)} file(s) from git index.")
         else:
             print("  No tracked files matched (nothing to untrack).")
