@@ -79,22 +79,16 @@ OCAML_PATTERNS = [
     "setup.log",
     ".merlin",
     "*.install",
-    "_opam/"
+    "_opam/",
 ]
 
+# http://www.racket-lang.org/
 RACKET_PATTERNS = [
-    # gitignore template for the Racket language
-    # website: http://www.racket-lang.org/
-    # DrRacket autosave files
-    *.rkt~
-    *.rkt.bak
-    \#*.rkt#
-    \#*.rkt#*#
-    # Compiled racket bytecode
-    compiled/
-    *.zo
-    # Dependency tracking files
-    *.dep    
+    "*.rkt~", # DrRacket autosave files
+    "*.rkt.bak",
+    "compiled/", # Compiled racket bytecode
+    "*.zo",
+    "*.dep", # Dependency tracking files
 ]
 
 def find_gitignore():
