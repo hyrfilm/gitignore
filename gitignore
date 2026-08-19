@@ -9,6 +9,8 @@ Usage:
   gitignore --defaults                  Add common patterns everyone wants
   gitignore --python                    Add Python-specific patterns
   gitignore --js                        Add JavaScript/Node-specific patterns
+  gitignore --ocaml                     OCaml
+  gitignore --racket                    Racket
 
 Install: put this file somewhere on your PATH and chmod +x it.
 """
@@ -68,22 +70,31 @@ OCAML_PATTERNS = [
     "*.cmx",
     "*.cmxs",
     "*.cmxa",
-
     "*.cmt",
     "*.cmti",
-
     "_build/",
-
     "*.byte",
     "*.native",
-
     "setup.data",
     "setup.log",
-
     ".merlin",
     "*.install",
-    
     "_opam/"
+]
+
+RACKET_PATTERNS = [
+    # gitignore template for the Racket language
+    # website: http://www.racket-lang.org/
+    # DrRacket autosave files
+    *.rkt~
+    *.rkt.bak
+    \#*.rkt#
+    \#*.rkt#*#
+    # Compiled racket bytecode
+    compiled/
+    *.zo
+    # Dependency tracking files
+    *.dep    
 ]
 
 def find_gitignore():
@@ -190,6 +201,7 @@ def main():
     parser.add_argument("--python", action="store_true", help="Add Python ignores")
     parser.add_argument("--js", action="store_true", help="Add JavaScript/Node ignores")
     parser.add_argument("--ocaml", action="store_true", help="Add OCaml/Dune/OPAM ignores")
+    parser.add_argument("--racket", action="store_true", help="Add ignores for the Racket language")
 
     args = parser.parse_args()
 
