@@ -227,6 +227,7 @@ def main():
         (args.python, "Python", PYTHON_PATTERNS),
         (args.js, "JavaScript", JS_PATTERNS),
         (args.ocaml, "OCaml", OCAML_PATTERNS),
+        (args.racket, "Racket", RACKET_PATTERNS),
     ]:
         if flag:
             any_action = True
