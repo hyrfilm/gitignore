@@ -6,11 +6,10 @@ Usage:
   gitignore <pattern> [<pattern> ...]   Add pattern(s) to .gitignore
   gitignore --undo <pattern>            Remove pattern and untrack files matching it
   gitignore --list                      Show current .gitignore contents
-  gitignore --defaults                  Add common patterns everyone wants
-  gitignore --python                    Add Python-specific patterns
-  gitignore --js                        Add JavaScript/Node-specific patterns
-  gitignore --ocaml                     OCaml
-  gitignore --racket                    Racket
+  gitignore --<language>                Add a built-in pattern set (--help lists them)
+
+To add a language, add one entry to LANGUAGES below - the flag, the --help text
+and the section heading are all derived from it.
 
 Install: put this file somewhere on your PATH and chmod +x it.
 """
@@ -19,77 +18,97 @@ import sys
 import os
 import subprocess
 import argparse
+from collections import namedtuple
 
-DEFAULTS = [
-    ".DS_Store",
-    "Thumbs.db",
-    ".env",
-    ".env.local",
-    "*.log",
-    "*.swp",
-    "*.swo",
-    ".idea/",
-    ".vscode/",
-]
+# flag name -> pattern set. The argparse flag, its --help text and the heading
+# written into .gitignore all come from here, so adding a language is one entry.
+Lang = namedtuple("Lang", "label help patterns")
 
-PYTHON_PATTERNS = [
-    "__pycache__/",
-    "*.py[cod]",
-    "*.pyo",
-    ".venv/",
-    "venv/",
-    ".mypy_cache/",
-    ".ruff_cache/",
-    ".pytest_cache/",
-    "*.egg-info/",
-    "dist/",
-    "build/",
-    ".coverage",
-    "htmlcov/",
-    ".tox/",
-]
+LANGUAGES = {
+    "defaults": Lang("Defaults", "Add common default ignores", [
+        ".DS_Store",
+        "Thumbs.db",
+        ".env",
+        ".env.local",
+        "*.log",
+        "*.swp",
+        "*.swo",
+        ".idea/",
+        ".vscode/",
+    ]),
 
-JS_PATTERNS = [
-    "node_modules/",
-    "dist/",
-    "build/",
-    ".next/",
-    ".nuxt/",
-    "*.min.js",
-    "*.min.css",
-    ".parcel-cache/",
-    "coverage/",
-    ".turbo/",
-    "*.tsbuildinfo",
-]
+    "python": Lang("Python", "Add Python ignores", [
+        "__pycache__/",
+        "*.py[cod]",
+        "*.pyo",
+        ".venv/",
+        "venv/",
+        ".mypy_cache/",
+        ".ruff_cache/",
+        ".pytest_cache/",
+        "*.egg-info/",
+        "dist/",
+        "build/",
+        ".coverage",
+        "htmlcov/",
+        ".tox/",
+    ]),
 
-OCAML_PATTERNS = [
-    "*.cmi",
-    "*.a",
-    "*.o",
-    "*.cmx",
-    "*.cmxs",
-    "*.cmxa",
-    "*.cmt",
-    "*.cmti",
-    "_build/",
-    "*.byte",
-    "*.native",
-    "setup.data",
-    "setup.log",
-    ".merlin",
-    "*.install",
-    "_opam/",
-]
+    "js": Lang("JavaScript", "Add JavaScript/Node ignores", [
+        "node_modules/",
+        "dist/",
+        "build/",
+        ".next/",
+        ".nuxt/",
+        "*.min.js",
+        "*.min.css",
+        ".parcel-cache/",
+        "coverage/",
+        ".turbo/",
+        "*.tsbuildinfo",
+    ]),
 
-# http://www.racket-lang.org/
-RACKET_PATTERNS = [
-    "*.rkt~", # DrRacket autosave files
-    "*.rkt.bak",
-    "compiled/", # Compiled racket bytecode
-    "*.zo",
-    "*.dep", # Dependency tracking files
-]
+    "ocaml": Lang("OCaml", "Add OCaml/Dune/OPAM ignores", [
+        "*.cmi",
+        "*.a",
+        "*.o",
+        "*.cmx",
+        "*.cmxs",
+        "*.cmxa",
+        "*.cmt",
+        "*.cmti",
+        "_build/",
+        "*.byte",
+        "*.native",
+        "setup.data",
+        "setup.log",
+        ".merlin",
+        "*.install",
+        "_opam/",
+    ]),
+
+    # http://www.racket-lang.org/
+    "racket": Lang("Racket", "Add ignores for the Racket language", [
+        "*.rkt~", # DrRacket autosave files
+        "*.rkt.bak",
+        "compiled/", # Compiled racket bytecode
+        "*.zo",
+        "*.dep", # Dependency tracking files
+    ]),
+
+    "elixir": Lang("Elixir", "Add Elixir/Mix ignores", [
+        "/_build/",
+        "/deps/",
+        "/cover/", # mix test --cover output
+        "/doc/", # mix docs output
+        "/.fetch",
+        "erl_crash.dump",
+        "*.ez", # Built archives
+        "*.beam",
+        "/config/*.secret.exs",
+        ".elixir_ls/", # ElixirLS cache
+    ]),
+}
 
 def find_gitignore():
     """Walk up from cwd to find the repo root and its .gitignore."""
@@ -142,21 +161,32 @@ def append_patterns(gitignore_path, patterns, label=None):
     return to_add, skipped
 
 
-def git_untrack(pattern):
-    """Run git rm --cached for files matching the pattern."""
+def git_ls(args):
+    """Run git ls-files with ARGS; return matching paths, or [] if git errored."""
+    result = subprocess.run(
+        ["git", "ls-files", "-z"] + args,
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        return []
+    return [f for f in result.stdout.split("\0") if f]
+
+
+def git_untrack(patterns):
+    """Untrack files that are tracked but now ignored. PATTERNS is a str or list."""
+    if isinstance(patterns, str):
+        patterns = [patterns]
     try:
-        result = subprocess.run(
-            ["git", "ls-files", "--ignored", "--exclude-standard", "-z"],
-            capture_output=True, text=True
-        )
-        files = [f for f in result.stdout.split("\0") if f]
+        # -i needs -c (or -o) or git refuses: list tracked-but-ignored files.
+        # ":/" widens the search to the whole repo -- without it git only looks
+        # below the cwd, so running from a subdirectory would miss most of it.
+        files = git_ls(["--cached", "--ignored", "--exclude-standard", "--", ":/"])
         if not files:
-            # Fallback: try matching by pattern directly
-            result2 = subprocess.run(
-                ["git", "ls-files", pattern],
-                capture_output=True, text=True
-            )
-            files = [f for f in result2.stdout.splitlines() if f]
+            # Fallback: match the patterns as pathspecs. Leading "/" anchors a
+            # .gitignore pattern to the repo root but is not valid in a pathspec.
+            pathspecs = [":/" + p.lstrip("/") for p in patterns if p.strip("/")]
+            if pathspecs:
+                files = git_ls(["--"] + pathspecs)
         if files:
             subprocess.run(["git", "rm", "--cached", "--quiet", "-r", "--ignore-unmatch"] + files)
             print(f"  Untracked {len(files)} file(s) from git index.")
@@ -191,11 +221,8 @@ def main():
     parser.add_argument("patterns", nargs="*", help="Pattern(s) to add to .gitignore")
     parser.add_argument("--undo", metavar="PATTERN", help="Remove a pattern and untrack matching files")
     parser.add_argument("--list", action="store_true", help="Show .gitignore contents")
-    parser.add_argument("--defaults", action="store_true", help="Add common default ignores")
-    parser.add_argument("--python", action="store_true", help="Add Python ignores")
-    parser.add_argument("--js", action="store_true", help="Add JavaScript/Node ignores")
-    parser.add_argument("--ocaml", action="store_true", help="Add OCaml/Dune/OPAM ignores")
-    parser.add_argument("--racket", action="store_true", help="Add ignores for the Racket language")
+    for flag, lang in LANGUAGES.items():
+        parser.add_argument(f"--{flag}", action="store_true", help=lang.help)
 
     args = parser.parse_args()
 
@@ -221,24 +248,18 @@ def main():
 
     any_action = False
 
-    # --defaults / --python / --js
-    for flag, label, patterns in [
-        (args.defaults, "Defaults", DEFAULTS),
-        (args.python, "Python", PYTHON_PATTERNS),
-        (args.js, "JavaScript", JS_PATTERNS),
-        (args.ocaml, "OCaml", OCAML_PATTERNS),
-        (args.racket, "Racket", RACKET_PATTERNS),
-    ]:
-        if flag:
+    # Built-in pattern sets
+    for flag, lang in LANGUAGES.items():
+        if getattr(args, flag.replace("-", "_")):
             any_action = True
-            added, skipped = append_patterns(gitignore_path, patterns, label=label)
+            added, skipped = append_patterns(gitignore_path, lang.patterns, label=lang.label)
             if added:
-                print(f"Added ({label}): {', '.join(added)}")
+                print(f"Added ({lang.label}): {', '.join(added)}")
             if skipped:
-                print(f"Already ignored ({label}): {', '.join(skipped)}")
+                print(f"Already ignored ({lang.label}): {', '.join(skipped)}")
             # Untrack any newly ignored files
-            for p in added:
-                git_untrack(p)
+            if added:
+                git_untrack(added)
 
     # Positional patterns
     if args.patterns:
@@ -249,8 +270,7 @@ def main():
             print(f"  If you meant to change it, run: gitignore --undo {p} && gitignore <new-pattern>")
         if added:
             print(f"Added to {gitignore_path}: {', '.join(added)}")
-            for p in added:
-                git_untrack(p)
+            git_untrack(added)
 
     if not any_action:
         parser.print_help()
