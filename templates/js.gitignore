@@ -1,0 +1,18 @@
+# JavaScript: Add JavaScript/Node ignores
+
+node_modules/
+dist/
+build/
+
+# Framework build output
+.next/
+.nuxt/
+
+*.min.js
+*.min.css
+
+# Tool caches
+.parcel-cache/
+coverage/
+.turbo/
+*.tsbuildinfo

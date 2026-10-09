@@ -1,0 +1,16 @@
+# Defaults: Add common default ignores
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+.env.local
+
+# Logs / editor junk
+*.log
+*.swp
+*.swo
+.idea/
+.vscode/

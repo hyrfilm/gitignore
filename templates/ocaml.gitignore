@@ -1,0 +1,21 @@
+# OCaml: Add OCaml/Dune/OPAM ignores
+
+# Compiled objects
+*.cmi
+*.a
+*.o
+*.cmx
+*.cmxs
+*.cmxa
+*.cmt
+*.cmti
+*.byte
+*.native
+
+# Dune / OPAM
+_build/
+_opam/
+setup.data
+setup.log
+.merlin
+*.install

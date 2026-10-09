@@ -1,0 +1,22 @@
+# Elixir: Add Elixir/Mix ignores
+
+/_build/
+/deps/
+
+# mix test --cover output
+/cover/
+
+# mix docs output
+/doc/
+
+/.fetch
+erl_crash.dump
+
+# Built archives
+*.ez
+*.beam
+
+/config/*.secret.exs
+
+# ElixirLS cache
+.elixir_ls/

@@ -1,0 +1,12 @@
+# Racket: Add ignores for the Racket language
+
+# DrRacket autosave files
+*.rkt~
+*.rkt.bak
+
+# Compiled racket bytecode
+compiled/
+*.zo
+
+# Dependency tracking files
+*.dep
